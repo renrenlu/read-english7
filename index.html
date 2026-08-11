@@ -75,9 +75,9 @@ select.ctrl{padding-right:30px}
   
 
 
-<audio id="audio-0" preload="metadata" playsinline src="四季.mp3"></audio>
-<audio id="audio-1" preload="metadata" playsinline src="favorite-season-summer.mp3"></audio>
-<audio id="audio-2" preload="metadata" playsinline src="24-太阳时数.mp3"></audio>
+<audio id="audio-0" preload="metadata" playsinline src="four-seasons.mp3"></audio>
+<audio id="audio-1" preload="metadata" playsinline src="favourite-season-summer.mp3"></audio>
+<audio id="audio-2" preload="metadata" playsinline src="24-solar-terms.mp3"></audio>
 </div>
 
 <script>
@@ -174,6 +174,17 @@ async function playUnit(i, keepContinuous=false){
 }
 
 document.querySelectorAll('audio').forEach(a=>{
+  a.addEventListener('error',()=>{
+    const src=a.getAttribute('src')||'未知音频';
+    statusEl.textContent='音频加载失败：'+src;
+    statusEl.style.color='#b91c1c';
+  });
+  a.addEventListener('loadedmetadata',()=>{
+    if(statusEl.textContent.startsWith('音频加载失败：')){
+      statusEl.textContent='音频已加载';
+      statusEl.style.color='';
+    }
+  });
   a.addEventListener('timeupdate',()=>{
     if(a!==aud() || stopAt===null)return;
     syncWordHighlight();
