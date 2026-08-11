@@ -161,12 +161,30 @@ async function playUnit(i, keepContinuous=false){
   speechSynthesis.cancel();
   continuous=keepContinuous;
   activate(i);
-  const u=passages[pIndex].units[uIndex], a=aud();
+
+  const us=passages[pIndex].units;
+  const u=us[uIndex], a=aud();
+  const prev=uIndex>0 ? us[uIndex-1] : null;
+  const next=uIndex<us.length-1 ? us[uIndex+1] : null;
+
+  // iPhone/iPad Safari can clip the first phoneme when seeking directly to
+  // the exact MP3 timestamp. Start slightly inside the preceding silence,
+  // and leave a little tail after the unit. Pads are limited by neighboring
+  // units so previous/next speech does not leak in.
+  const gapBefore=prev ? Math.max(0, u.start-prev.end) : u.start;
+  const gapAfter=next ? Math.max(0, next.start-u.end) : 0.30;
+  const leadIn=Math.min(0.24, gapBefore*0.80);
+  const tailOut=Math.min(0.18, gapAfter*0.70);
+  const playStart=Math.max(0, u.start-leadIn);
+  stopAt=u.end+tailOut;
+
   a.playbackRate=parseFloat(speed.value);
-  stopAt=u.end;
   try {
-    a.currentTime=u.start;
+    // Pause first, then seek, which is more reliable on iOS Safari.
+    a.pause();
+    a.currentTime=playStart;
     await a.play();
+    statusEl.style.color='';
     statusEl.textContent='正在朗读';
   } catch(e) {
     statusEl.textContent='请再点一次句子或播放按钮';
