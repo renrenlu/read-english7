@@ -43,6 +43,32 @@ select.ctrl{padding-right:30px}
   .unit.title{font-size:30px}
   .unit.heading{font-size:24px}
 }
+
+.article-select-wrap{
+  display:flex;align-items:center;gap:12px;
+  background:#fff;border:1px solid var(--line);
+  border-radius:16px;padding:12px 14px;margin:14px 0 8px;
+  box-shadow:0 8px 22px rgba(20,35,70,.05)
+}
+.article-select-label{
+  font-weight:800;white-space:nowrap;color:#334155
+}
+.article-select{
+  flex:1;min-width:0;border:1px solid var(--line);
+  background:#fff;border-radius:12px;padding:12px 14px;
+  font:inherit;font-weight:700;color:var(--text)
+}
+.ctrl.mode-active{
+  background:var(--blue)!important;
+  border-color:var(--blue)!important;
+  color:#fff!important;
+  box-shadow:0 6px 16px rgba(37,99,235,.18)
+}
+@media(max-width:640px){
+  .article-select-wrap{align-items:stretch;flex-direction:column;gap:7px}
+  .article-select{width:100%}
+}
+
 </style>
 </head>
 <body>
@@ -52,12 +78,22 @@ select.ctrl{padding-right:30px}
     <p>点整句播放原始录音中的对应句子；点单词单独发音。支持 iPhone 与 iPad Safari，横屏和竖屏都会自适应。</p>
   </div>
 
-  <nav class="tabs" aria-label="文章切换"><button class="tab active" type="button" data-p="0">The Four Seasons</button><button class="tab" type="button" data-p="1">My Favourite Season: Summer</button><button class="tab" type="button" data-p="2">The 24 Solar Terms</button></nav>
+  
+  <div class="article-select-wrap">
+    <label for="articleSelect" class="article-select-label">选择文章</label>
+    <select id="articleSelect" class="article-select">
+      <option value="0">The Four Seasons</option>
+      <option value="1">My Favourite Season: Summer</option>
+      <option value="2">The 24 Solar Terms</option>
+    </select>
+  </div>
+
 
   <div class="toolbar">
     <button class="ctrl primary" id="playAll" type="button">▶ 连续朗读</button>
     <button class="ctrl" id="repeatAll" type="button">↻ 全文重复读</button>
     <button class="ctrl" id="fluentRead" type="button">🎧 流利朗读</button>
+    <button class="ctrl" id="shadow06" type="button">👥 影子跟读 0.6×</button>
     <button class="ctrl" id="shadow08" type="button">👥 影子跟读 0.8×</button>
     <button class="ctrl" id="shadow10" type="button">👥 影子跟读 1.0×</button>
     <button class="ctrl" id="prev" type="button">← 上一句</button>
@@ -109,6 +145,16 @@ async function unlockAudio(){
 }
 
 function units(){return [...document.querySelectorAll('#passage-'+pIndex+' .unit')]}
+
+
+function clearModeButtons(){
+  document.querySelectorAll('.ctrl.mode-active').forEach(b=>b.classList.remove('mode-active'));
+}
+function setModeButton(id){
+  clearModeButtons();
+  const b=document.getElementById(id);
+  if(b)b.classList.add('mode-active');
+}
 
 function stopFullMode(){
   fullMode=false;
@@ -172,11 +218,12 @@ function activate(i, scroll=true){
 
 function switchPassage(i){
   stopFullMode();
+  clearModeButtons();
   document.querySelectorAll('audio').forEach(a=>a.pause());
   speechSynthesis.cancel();
   continuous=false; stopAt=null; pIndex=i; uIndex=0;
   document.querySelectorAll('.passage').forEach((s,j)=>s.hidden=j!==i);
-  document.querySelectorAll('.tab').forEach((b,j)=>b.classList.toggle('active',j===i));
+  document.getElementById('articleSelect').value=String(i);
   activate(0,false); statusEl.textContent='准备就绪';
 }
 
@@ -264,6 +311,7 @@ document.querySelectorAll('audio').forEach(a=>{
       fullMode=false;
       clearFollow();
       statusEl.textContent='全文朗读完成';
+      clearModeButtons();
     }
   });
   a.addEventListener('timeupdate',()=>{
@@ -287,6 +335,7 @@ document.querySelectorAll('audio').forEach(a=>{
 
 function speakWord(word,el){
   stopFullMode();
+  clearModeButtons();
   aud().pause(); stopAt=null; continuous=false; clearFollow();
   speechSynthesis.cancel();
   if(wordEl)wordEl.classList.remove('speaking');
@@ -304,25 +353,60 @@ function speakWord(word,el){
   speechSynthesis.speak(u);
 }
 
-document.querySelectorAll('.tab').forEach(b=>b.addEventListener('click',()=>switchPassage(+b.dataset.p)));
+
+document.getElementById('articleSelect').addEventListener('change',e=>{
+  clearModeButtons();
+  switchPassage(parseInt(e.target.value,10));
+});
+
 document.querySelectorAll('.unit').forEach(el=>{
   el.addEventListener('click',e=>{
     if(e.target.closest('.word'))return;
-    playUnit(+el.dataset.u,false);
+    clearModeButtons(); playUnit(+el.dataset.u,false);
   });
-  el.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();playUnit(+el.dataset.u,false)}});
+  el.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();clearModeButtons(); playUnit(+el.dataset.u,false)}});
 });
 document.querySelectorAll('.word').forEach(w=>w.addEventListener('click',e=>{
   e.stopPropagation();speakWord(w.dataset.word,w);
 }));
-document.getElementById('playAll').onclick=()=>playUnit(uIndex,true);
-document.getElementById('repeatAll').onclick=()=>startFullMode(1,true,'全文重复朗读');
-document.getElementById('fluentRead').onclick=()=>startFullMode(1,false,'流利朗读');
-document.getElementById('shadow08').onclick=()=>startFullMode(0.8,false,'影子跟读 0.8×');
-document.getElementById('shadow10').onclick=()=>startFullMode(1,false,'影子跟读 1.0×');
-document.getElementById('prev').onclick=()=>playUnit(Math.max(0,uIndex-1),false);
-document.getElementById('next').onclick=()=>playUnit(Math.min(units().length-1,uIndex+1),false);
-document.getElementById('repeat').onclick=()=>playUnit(uIndex,false);
+document.getElementById('playAll').onclick=()=>{
+  setModeButton('playAll');
+  playUnit(uIndex,true);
+};
+document.getElementById('repeatAll').onclick=()=>{
+  setModeButton('repeatAll');
+  startFullMode(1,true,'全文重复朗读');
+};
+document.getElementById('fluentRead').onclick=()=>{
+  setModeButton('fluentRead');
+  startFullMode(1,false,'流利朗读');
+};
+
+document.getElementById('shadow06').onclick=()=>{
+  setModeButton('shadow06');
+  startFullMode(0.6,false,'影子跟读 0.6×');
+};
+
+document.getElementById('shadow08').onclick=()=>{
+  setModeButton('shadow08');
+  startFullMode(0.8,false,'影子跟读 0.8×');
+};
+document.getElementById('shadow10').onclick=()=>{
+  setModeButton('shadow10');
+  startFullMode(1,false,'影子跟读 1.0×');
+};
+document.getElementById('prev').onclick=()=>{
+  clearModeButtons();
+  playUnit(Math.max(0,uIndex-1),false);
+};
+document.getElementById('next').onclick=()=>{
+  clearModeButtons();
+  playUnit(Math.min(units().length-1,uIndex+1),false);
+};
+document.getElementById('repeat').onclick=()=>{
+  clearModeButtons();
+  playUnit(uIndex,false);
+};
 speed.onchange=()=>{aud().playbackRate=parseFloat(speed.value)};
 window.speechSynthesis && speechSynthesis.getVoices();
 activate(0,false);
