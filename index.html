@@ -23,6 +23,8 @@ body{margin:0;background:var(--bg);color:var(--text);font-family:-apple-system,B
 .tab{white-space:nowrap;border-radius:999px}
 .tab.active,.ctrl.primary{background:var(--blue);border-color:var(--blue);color:#fff}
 .toolbar{position:sticky;top:8px;z-index:20;padding:10px;display:flex;gap:9px;flex-wrap:wrap;align-items:center;margin:10px 0 14px}
+.toolbar.reading-hidden{transform:translateY(-120%);opacity:0;pointer-events:none;margin-bottom:calc(-1 * var(--toolbar-h, 0px));}
+.toolbar{transition:transform .22s ease,opacity .18s ease,margin-bottom .22s ease}
 select.ctrl{padding-right:30px}
 .status{font-size:14px;color:var(--muted)}
 .passage{padding:18px}
@@ -165,6 +167,11 @@ async function unlockAudio(){
 function units(){return [...document.querySelectorAll('#passage-'+pIndex+' .unit')]}
 
 
+function setReadingControlsHidden(hidden){
+  const tb=document.querySelector('.toolbar');
+  if(tb)tb.classList.toggle('reading-hidden',!!hidden);
+}
+
 function clearModeButtons(){
   document.querySelectorAll('.ctrl.mode-active').forEach(b=>b.classList.remove('mode-active'));
 }
@@ -220,6 +227,7 @@ async function startFullMode(rate=1, repeat=false, label='流利朗读'){
   statusEl.textContent=label;
   try{
     await a.play();
+    setReadingControlsHidden(true);
   }catch(e){
     fullMode=false;
     a.loop=false;
@@ -238,6 +246,7 @@ function activate(i, scroll=true){
 }
 
 function switchPassage(i){
+  setReadingControlsHidden(false);
   pausedByUser=false;
   const pb=document.getElementById('pauseBtn');
   if(pb){pb.textContent='⏸ 暂停';pb.classList.remove('mode-active');}
@@ -314,6 +323,7 @@ async function playUnit(i, keepContinuous=false){
     a.pause();
     a.currentTime=playStart;
     await a.play();
+    setReadingControlsHidden(true);
     statusEl.style.color='';
     statusEl.textContent='正在朗读';
   } catch(e) {
@@ -338,6 +348,7 @@ document.querySelectorAll('audio').forEach(a=>{
       fullMode=false;
       clearFollow();
       statusEl.textContent='全文朗读完成';
+      setReadingControlsHidden(false);
       clearModeButtons();
     }
   });
@@ -354,13 +365,14 @@ document.querySelectorAll('audio').forEach(a=>{
       if(continuous){
         const n=uIndex+1;
         if(n<units().length) setTimeout(()=>playUnit(n,true),180);
-        else {continuous=false;statusEl.textContent='朗读完成'}
+        else {continuous=false;statusEl.textContent='朗读完成';setReadingControlsHidden(false)}
       } else statusEl.textContent='已完成本句';
     }
   });
 });
 
 function speakWord(word,el){
+  setReadingControlsHidden(false);
   pausedByUser=false;
   const pb=document.getElementById('pauseBtn');
   if(pb){pb.textContent='⏸ 暂停';pb.classList.remove('mode-active');}
@@ -467,6 +479,36 @@ document.getElementById('repeat').onclick=()=>{
 speed.onchange=()=>{aud().playbackRate=parseFloat(speed.value)};
 window.speechSynthesis && speechSynthesis.getVoices();
 activate(0,false);
+
+// 阅读时：上滑收起控制区，下滑恢复控制区
+let lastScrollY = window.scrollY;
+let scrollTicking = false;
+function isReadingNow(){
+  const a=aud();
+  return fullMode || continuous || (a && !a.paused);
+}
+function updateToolbarHeight(){
+  const tb=document.querySelector('.toolbar');
+  if(tb) document.documentElement.style.setProperty('--toolbar-h', tb.offsetHeight+'px');
+}
+updateToolbarHeight();
+window.addEventListener('resize',updateToolbarHeight,{passive:true});
+window.addEventListener('scroll',()=>{
+  if(scrollTicking)return;
+  scrollTicking=true;
+  requestAnimationFrame(()=>{
+    const y=window.scrollY;
+    const dy=y-lastScrollY;
+    if(isReadingNow()){
+      if(dy>8 && y>80) setReadingControlsHidden(true);   // 上滑页面（向下阅读）→ 收起
+      else if(dy<-8) setReadingControlsHidden(false);    // 下滑页面（往回滑）→ 恢复
+    } else {
+      setReadingControlsHidden(false);
+    }
+    lastScrollY=y;
+    scrollTicking=false;
+  });
+},{passive:true});
 </script>
 </body>
 </html>
