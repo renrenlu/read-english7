@@ -157,7 +157,7 @@ select.ctrl{padding-right:30px}
 <audio id="audio-4" playsinline preload="metadata" src="han-li-best-friend.mp3"></audio>
 <audio id="audio-5" playsinline preload="metadata" src="a-true-friend.mp3"></audio>
 <audio id="audio-6" preload="metadata" playsinline src="the-amazing-planet.mp3"></audio>
-<audio id="audio-7" preload="metadata" playsinline src="saihanba.mp3"></audio>
+<audio id="audio-7" preload="metadata" playsinline src="saihanba.mp3?v=3"></audio>
 </div>
 <script>
 
@@ -196,19 +196,45 @@ const statusEl=document.getElementById('status');
 
 function aud(){return document.getElementById('audio-'+pIndex)}
 
-let audioUnlocked=false;
+const unlockedAudios = new WeakSet();
+
+function waitForAudioReady(a){
+  if(a.readyState >= 1) return Promise.resolve();
+  return new Promise((resolve,reject)=>{
+    const ok=()=>{cleanup();resolve();};
+    const bad=()=>{cleanup();reject(a.error||new Error('audio load failed'));};
+    const cleanup=()=>{
+      a.removeEventListener('loadedmetadata',ok);
+      a.removeEventListener('canplay',ok);
+      a.removeEventListener('error',bad);
+    };
+    a.addEventListener('loadedmetadata',ok,{once:true});
+    a.addEventListener('canplay',ok,{once:true});
+    a.addEventListener('error',bad,{once:true});
+    a.load();
+    setTimeout(()=>{cleanup();resolve();},2500);
+  });
+}
+
 async function unlockAudio(){
-  if(audioUnlocked)return;
   const a=aud();
+  if(!a) throw new Error('找不到当前文章音频');
+  await waitForAudioReady(a);
+
+  if(unlockedAudios.has(a)) return;
+
   try{
+    const oldMuted=a.muted;
     a.muted=true;
-    await a.play();
+    const p=a.play();
+    if(p && typeof p.then==='function') await p;
     a.pause();
-    a.currentTime=0;
-    a.muted=false;
-    audioUnlocked=true;
+    try{ a.currentTime=0; }catch(_){}
+    a.muted=oldMuted;
+    unlockedAudios.add(a);
   }catch(e){
     a.muted=false;
+    // Do not block the real user-initiated play attempt.
   }
 }
 
@@ -549,6 +575,16 @@ document.getElementById('repeat').onclick=()=>{
 speed.onchange=()=>{aud().playbackRate=parseFloat(speed.value)};
 window.speechSynthesis && speechSynthesis.getVoices();
 activate(0,false);
+
+
+document.querySelectorAll('audio').forEach((a,idx)=>{
+  a.addEventListener('error',()=>{
+    const code=a.error ? a.error.code : '?';
+    statusEl.textContent=`音频加载失败：第${idx+1}篇（错误${code}）`;
+    statusEl.style.color='#dc2626';
+  });
+});
+
 </script>
 </body>
 </html>
